@@ -1,0 +1,13 @@
+{  
+  "name": "afribot-frontend",  
+  "version": "1.0.0",  
+  "description": "AfriBot - African AI Assistant Frontend",  
+  "main": "index.html",  
+  "scripts": {  
+    "build": "echo 'Build complete'",  
+    "start": "echo 'Static site ready'"  
+  },  
+  "keywords": ["africa", "ai", "ubuntu", "chatbot"],  
+  "author": "AfriBot Team",  
+  "license": "MIT"  
+    }
