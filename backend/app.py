@@ -110,7 +110,7 @@ ai = AfricanAI()
 @app.route('/')  
 def home():  
     return jsonify({  
-        "name": "AfriBot API",  
+        "name": "AfiYor API",  
         "version": "1.0.0",  
         "description": "African AI Assistant with Ubuntu Philosophy",  
         "ubuntu": "I am because we are 🌍",  
