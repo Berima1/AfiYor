@@ -1,6 +1,6 @@
-# AfriBot - Your African AI Assistant 🌍  
+# AfiYor - Your African AI Assistant 🌍  
   
-AfriBot is the first AI assistant built specifically for Africa, powered by Ubuntu philosophy and designed to understand African business culture, mobile money systems, and community-driven approaches.  
+AfiYor is the first AI assistant built specifically for Africa, powered by Ubuntu philosophy and designed to understand African business culture, mobile money systems, and community-driven approaches.  
   
 ## ✨ Features  
   
