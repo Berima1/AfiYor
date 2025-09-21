@@ -1,4 +1,5 @@
-# AfiYor Intelligent Dynamic Response System - app.py
+# AfiYor Enhanced Features - app.py
+# User accounts, conversation history, personalization, and shareability
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -6,361 +7,535 @@ import time
 import random
 import os
 import hashlib
+import sqlite3
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
 
-class IntelligentAfiYor:
-    """Intelligent dynamic response system for AfiYor"""
+class AfiYorDatabase:
+    """Enhanced database for user accounts and features"""
+    
+    def __init__(self, db_path="afiyor.sqlite"):
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        """Initialize enhanced database schema"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE,
+                    name TEXT,
+                    country TEXT,
+                    industry TEXT,
+                    business_stage TEXT,
+                    created_at INTEGER,
+                    last_active INTEGER,
+                    total_queries INTEGER DEFAULT 0,
+                    subscription_tier TEXT DEFAULT 'free'
+                );
+                
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    session_id TEXT,
+                    query TEXT,
+                    response TEXT,
+                    confidence REAL,
+                    created_at INTEGER,
+                    country TEXT,
+                    industry_relevant BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    user_id TEXT PRIMARY KEY,
+                    preferred_topics TEXT,
+                    communication_style TEXT,
+                    business_goals TEXT,
+                    updated_at INTEGER,
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS shared_conversations (
+                    share_id TEXT PRIMARY KEY,
+                    conversation_id TEXT,
+                    user_id TEXT,
+                    title TEXT,
+                    created_at INTEGER,
+                    views INTEGER DEFAULT 0,
+                    expires_at INTEGER,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations (id),
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS user_industries (
+                    industry TEXT PRIMARY KEY,
+                    description TEXT,
+                    key_topics TEXT,
+                    relevant_sectors TEXT
+                );
+                
+                -- Insert industry data
+                INSERT OR REPLACE INTO user_industries VALUES 
+                ('fintech', 'Financial technology and mobile money', 'payments,banking,loans,savings', 'finance,technology'),
+                ('agriculture', 'Farming and agribusiness', 'farming,crops,livestock,supply_chain', 'agriculture,food'),
+                ('technology', 'Software and tech solutions', 'software,apps,platforms,innovation', 'technology,digital'),
+                ('retail', 'Commerce and trading', 'sales,marketing,customers,inventory', 'commerce,trade'),
+                ('manufacturing', 'Production and industrial', 'production,supply_chain,quality,export', 'industry,manufacturing'),
+                ('services', 'Professional and business services', 'consulting,professional,service_delivery', 'services,business'),
+                ('healthcare', 'Health and medical services', 'health,medical,wellness,telemedicine', 'health,medical'),
+                ('education', 'Educational services and edtech', 'learning,training,education,skills', 'education,training'),
+                ('logistics', 'Transportation and logistics', 'transport,delivery,supply_chain,logistics', 'transport,logistics');
+            """)
+
+class EnhancedAfiYor:
+    """Enhanced AfiYor with personalization and user features"""
     
     def __init__(self):
-        self.response_memory = {}  # Track what responses user has seen
+        self.db = AfiYorDatabase()
+        self.response_memory = {}
+        
+        # Industry-specific response modifiers
+        self.industry_contexts = {
+            'fintech': {
+                'focus_areas': ['mobile money', 'payments', 'banking', 'financial inclusion'],
+                'key_challenges': ['regulation', 'trust', 'security', 'financial literacy'],
+                'opportunities': ['unbanked population', 'mobile adoption', 'cross-border payments']
+            },
+            'agriculture': {
+                'focus_areas': ['supply chain', 'market access', 'weather', 'financing'],
+                'key_challenges': ['climate change', 'pricing', 'storage', 'transportation'],
+                'opportunities': ['food security', 'export markets', 'value addition']
+            },
+            'technology': {
+                'focus_areas': ['innovation', 'talent', 'infrastructure', 'market fit'],
+                'key_challenges': ['funding', 'skills gap', 'infrastructure', 'market education'],
+                'opportunities': ['digital transformation', 'mobile first', 'AI adoption']
+            },
+            'retail': {
+                'focus_areas': ['customer experience', 'inventory', 'location', 'pricing'],
+                'key_challenges': ['competition', 'margins', 'customer retention', 'supply chain'],
+                'opportunities': ['e-commerce growth', 'mobile payments', 'customer data']
+            }
+        }
+        
+        # Base response templates (enhanced from previous version)
+        self.base_responses = {
+            "business_startup": {
+                "ghana": [
+                    "Akwaaba! Starting a business in Ghana requires understanding our Akan cultural values and modern market dynamics. For {industry} ventures, focus on: building relationships with local suppliers and customers, registering with Ghana Investment Promotion Centre, understanding sector-specific regulations, and integrating mobile payments through {mobile_money}. Ghana's strengths in {sectors} create opportunities, especially in {focus_areas}. Consider joining {business_hubs} for networking and mentorship.",
+                    
+                    "In Ghana, successful {industry} entrepreneurs balance traditional business wisdom with innovation. Key strategies: Research your target market thoroughly in Accra or Kumasi, build partnerships with established local businesses, ensure your solution addresses real community needs, and leverage Ghana's competitive advantages in {sectors}. The {business_hubs} ecosystem provides valuable support. Mobile money adoption through {mobile_money} is essential for customer reach.",
+                    
+                    "Ghanaian business culture emphasizes patience, relationships, and community benefit. For {industry} startups: Spend time understanding local customs and market dynamics, engage with traditional and modern business networks, focus on sectors where Ghana excels like {sectors}, and implement mobile payment solutions using {mobile_money}. Community support and cultural sensitivity are crucial for long-term success in Ghana's market.",
+                ]
+            }
+        }
+        
+        # Country data (inherited from previous version)
         self.country_data = {
             "ghana": {
                 "greeting": "Akwaaba!",
                 "mobile_money": ["MTN MoMo", "AirtelTigo Money", "Vodafone Cash", "Zeepay"],
                 "business_hubs": ["Accra Digital Centre", "MEST Africa", "Impact Hub Accra", "Ghana Tech Lab"],
                 "key_sectors": ["cocoa", "gold", "oil", "fintech", "agriculture", "tourism"],
-                "cultural_values": ["Akan respect systems", "communal decision-making", "extended family support", "respect for elders"],
-                "languages": ["English", "Twi", "Ga", "Ewe", "Fante"],
-                "business_traits": ["relationship-first", "trust-building", "community involvement", "patience in negotiations"],
-                "challenges": ["access to capital", "infrastructure", "regulatory complexity", "skills gap"],
-                "opportunities": ["youth population", "mobile adoption", "natural resources", "regional trade hub"],
-                "success_factors": ["local partnerships", "cultural sensitivity", "mobile-first approach", "community engagement"]
-            },
-            "nigeria": {
-                "greeting": "Sannu! Bawo!",
-                "mobile_money": ["Paystack", "Flutterwave", "Opay", "PalmPay", "Kuda"],
-                "business_hubs": ["Lagos ecosystem", "Abuja tech scene", "Port Harcourt innovation", "Ibadan startups"],
-                "key_sectors": ["oil", "agriculture", "fintech", "entertainment", "e-commerce", "logistics"],
-                "cultural_values": ["diverse ethnic respect", "relationship hierarchy", "extended family networks", "religious considerations"],
-                "languages": ["English", "Yoruba", "Igbo", "Hausa", "Fulfulde"],
-                "business_traits": ["networking-focused", "resilient", "entrepreneurial spirit", "adaptability"],
-                "challenges": ["infrastructure gaps", "regulatory uncertainty", "security concerns", "currency volatility"],
-                "opportunities": ["largest African market", "young population", "oil wealth", "Nollywood influence"],
-                "success_factors": ["strong networks", "local partnerships", "understanding diversity", "mobile solutions"]
-            },
-            "kenya": {
-                "greeting": "Habari!",
-                "mobile_money": ["M-Pesa", "Airtel Money", "T-Kash", "Equitel"],
-                "business_hubs": ["Nairobi Silicon Savannah", "iHub", "MEST", "Nailab"],
-                "key_sectors": ["agriculture", "tourism", "mobile money", "renewable energy", "logistics"],
-                "cultural_values": ["Harambee cooperation", "Ubuntu philosophy", "respect for age", "community support"],
-                "languages": ["English", "Swahili", "Kikuyu", "Luo"],
-                "business_traits": ["innovative", "collaborative", "tech-savvy", "environmentally conscious"],
-                "challenges": ["drought cycles", "political uncertainty", "infrastructure needs", "youth unemployment"],
-                "opportunities": ["M-Pesa leadership", "tourism growth", "renewable energy potential", "regional hub"],
-                "success_factors": ["mobile money integration", "sustainability focus", "community partnerships", "innovation"]
+                "cultural_values": ["Akan respect systems", "communal decision-making", "extended family support"],
+                "languages": ["English", "Twi", "Ga", "Ewe", "Fante"]
             }
         }
+    
+    def create_user_account(self, user_data):
+        """Create new user account with personalization"""
+        user_id = hashlib.md5(f"{user_data['email']}{time.time()}".encode()).hexdigest()[:12]
         
-        self.response_templates = {
-            "business_startup": {
-                "ghana": [
-                    "Akwaaba! Starting a business in Ghana requires understanding our Akan cultural values. Focus on building relationships first - Ghanaians value trust and community connections. Consider these key factors: Register with Ghana Investment Promotion Centre, understand the local supply chains in sectors like {sectors}, and integrate mobile payments through {mobile_money}. The {business_hubs} can provide valuable networking opportunities.",
-                    
-                    "In Ghana, successful entrepreneurs combine traditional Akan business wisdom with modern innovation. Key strategies: Start with thorough market research in Accra or Kumasi, build partnerships with local suppliers, and ensure your business serves the community need. Ghana's strengths in {sectors} create opportunities, especially if you leverage {mobile_money} for payments and customer reach.",
-                    
-                    "Ghanaian business culture emphasizes patience and relationship-building. Before launching, spend time understanding local customs and business practices. Consider starting in Accra's tech ecosystem through {business_hubs}, focus on {sectors} where Ghana has competitive advantages, and use {mobile_money} platforms to reach customers effectively. Community support is crucial for long-term success.",
-                    
-                    "Starting a business in Ghana means embracing our communal values. Successful ventures often involve extended family and community input. Practical steps: Develop a business plan that considers local market dynamics, register with appropriate agencies, partner with established local businesses, and leverage Ghana's strengths in {sectors}. Mobile money adoption through {mobile_money} is essential for customer accessibility."
-                ],
-                "nigeria": [
-                    "Sannu! Nigeria's entrepreneurial spirit is legendary, but success requires understanding our complex, diverse market. With over 200 million people, focus on: Choosing the right state for registration, understanding local regulations, building networks across ethnic lines, and leveraging fintech solutions like {mobile_money}. Lagos leads in {sectors}, but opportunities exist nationwide.",
-                    
-                    "Nigerian business success comes from adaptability and strong relationships. Key strategies: Start with a clear understanding of your target demographic, build alliances across Nigeria's diverse regions, leverage the massive market size, and use digital platforms like {mobile_money} for transactions. The {business_hubs} provide excellent startup support and networking.",
-                    
-                    "In Nigeria, resilience and innovation drive business success. Consider these factors: Nigeria's leadership in {sectors} creates opportunities, the youth demographic is tech-savvy and entrepreneurial, mobile money adoption through {mobile_money} is growing rapidly, and government initiatives support SME development. Network extensively and understand regional differences.",
-                    
-                    "Nigeria offers Africa's largest market, but requires cultural sensitivity and strategic thinking. Successful approaches: Research regulatory requirements thoroughly, build diverse teams reflecting Nigeria's ethnic diversity, leverage fintech infrastructure like {mobile_money}, and focus on sectors where Nigeria leads: {sectors}. Community engagement and ethical business practices are essential."
-                ]
-            },
+        with sqlite3.connect(self.db.db_path) as conn:
+            conn.execute("""
+                INSERT INTO users (id, email, name, country, industry, business_stage, created_at, last_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user_id, user_data['email'], user_data['name'], 
+                user_data['country'], user_data.get('industry', 'general'),
+                user_data.get('business_stage', 'idea'), int(time.time()), int(time.time())
+            ))
             
-            "ubuntu_philosophy": [
-                "Ubuntu teaches us 'Ngiyakhona ngokuthi sikhona' - I am because we are. In business, this means your success should uplift your entire community. When you build a company, ask: How does this help my neighbors? How can my growth create opportunities for others? Ubuntu business practices include hiring locally, sourcing from community suppliers, sharing knowledge with other entrepreneurs, and ensuring profits benefit the broader community, not just individual wealth.",
-                
-                "The Ubuntu principle 'I am because we are' transforms how we approach entrepreneurship. Instead of zero-sum competition, Ubuntu encourages collaborative growth. Practical applications: Form business cooperatives with other entrepreneurs, create mentorship programs for upcoming business owners, design products that solve community problems, and measure success not just by profit but by community impact. Your business thrives when your community thrives.",
-                
-                "Ubuntu philosophy in modern entrepreneurship means recognizing our interconnectedness. When making business decisions, consider the ripple effects on your community. Ubuntu-driven businesses often: Partner with local suppliers and service providers, invest in employee development and well-being, create products that address real community needs, and share knowledge and resources with other entrepreneurs. Individual success without community growth is empty achievement.",
-                
-                "Understanding Ubuntu in business context: 'Umuntu ngumuntu ngabantu' - a person is a person through other people. This guides ethical business practices where success is measured by community upliftment. Ubuntu entrepreneurs focus on: Creating jobs and opportunities for others, building businesses that solve real community problems, sharing resources and knowledge freely, and ensuring business growth strengthens social bonds rather than creating inequality."
-            ],
+            # Create default preferences
+            conn.execute("""
+                INSERT INTO user_preferences (user_id, preferred_topics, communication_style, business_goals, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                user_id, json.dumps([user_data.get('industry', 'general')]),
+                'detailed', user_data.get('business_goals', ''), int(time.time())
+            ))
+        
+        return user_id
+    
+    def get_user_profile(self, user_id):
+        """Get complete user profile with preferences"""
+        with sqlite3.connect(self.db.db_path) as conn:
+            user_row = conn.execute("""
+                SELECT u.*, p.preferred_topics, p.communication_style, p.business_goals
+                FROM users u
+                LEFT JOIN user_preferences p ON u.id = p.user_id
+                WHERE u.id = ?
+            """, (user_id,)).fetchone()
             
-            "mobile_money": {
-                "ghana": [
-                    "Ghana's mobile money ecosystem is led by {mobile_money}, with MTN MoMo dominating the market. For business integration: MTN MoMo offers robust APIs for merchant payments, AirtelTigo Money serves specific demographics effectively, Vodafone Cash provides good enterprise solutions, and Zeepay enables international transfers. Consider multi-platform integration to reach all customer segments, and ensure your business model accounts for transaction fees and customer preferences.",
-                    
-                    "Mobile money in Ghana has achieved remarkable penetration, especially through {mobile_money}. Business opportunities include: Agent banking services in rural areas, merchant payment solutions for small businesses, integration with e-commerce platforms, and value-added services like savings and micro-loans. Success requires understanding customer behavior, regulatory compliance with Bank of Ghana requirements, and building trust through reliable service delivery.",
-                    
-                    "Ghana's mobile money success story centers on {mobile_money}, particularly MTN MoMo's market leadership. Key insights for businesses: Mobile money users prefer simple, fast transactions, agent networks are crucial for cash-in/cash-out services, integration with traditional banking is increasing, and opportunities exist in cross-border payments and merchant services. Focus on user experience and regulatory compliance for sustainable growth."
-                ]
-            },
+            if user_row:
+                return {
+                    'id': user_row[0], 'email': user_row[1], 'name': user_row[2],
+                    'country': user_row[3], 'industry': user_row[4], 'business_stage': user_row[5],
+                    'total_queries': user_row[8], 'subscription_tier': user_row[9],
+                    'preferred_topics': json.loads(user_row[10] or '[]'),
+                    'communication_style': user_row[11], 'business_goals': user_row[12]
+                }
+        return None
+    
+    def save_conversation(self, user_id, query, response, confidence, country, session_id):
+        """Save conversation with enhanced metadata"""
+        conv_id = hashlib.md5(f"{user_id}{query}{time.time()}".encode()).hexdigest()[:16]
+        
+        # Determine if industry relevant
+        user_profile = self.get_user_profile(user_id) if user_id != 'anonymous' else None
+        industry_relevant = False
+        
+        if user_profile and user_profile['industry'] in self.industry_contexts:
+            industry_context = self.industry_contexts[user_profile['industry']]
+            industry_relevant = any(
+                focus in query.lower() 
+                for focus in industry_context['focus_areas']
+            )
+        
+        with sqlite3.connect(self.db.db_path) as conn:
+            conn.execute("""
+                INSERT INTO conversations (id, user_id, session_id, query, response, confidence, created_at, country, industry_relevant)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (conv_id, user_id, session_id, query, response, confidence, int(time.time()), country, industry_relevant))
             
-            "culture_business": {
-                "ghana": [
-                    "Ghanaian business culture is rooted in Akan traditions emphasizing respect, patience, and community consensus. Key cultural factors: Meetings often start with relationship-building conversation, decision-making involves consultation with elders or senior colleagues, business deals are sealed through personal relationships rather than just contracts, and long-term thinking is valued over quick profits. Understanding these cultural nuances is essential for successful business relationships in Ghana.",
-                    
-                    "In Ghana, business success requires cultural sensitivity to our diverse ethnic groups and traditions. Important aspects: Respect for hierarchy and age in business settings, the importance of extended family in business decisions, communal approaches to problem-solving, and the integration of traditional values with modern business practices. Building trust takes time, but results in stronger, more sustainable business partnerships.",
-                    
-                    "Ghanaian business culture balances traditional Akan values with modern entrepreneurship. Cultural considerations include: The role of chiefs and traditional authorities in community business decisions, the importance of social responsibility and community contribution, preference for face-to-face meetings and relationship building, and the integration of religious considerations in business practices. Successful businesses honor these traditions while embracing innovation."
-                ]
-            }
-        }
+            # Update user query count
+            if user_id != 'anonymous':
+                conn.execute("""
+                    UPDATE users SET total_queries = total_queries + 1, last_active = ?
+                    WHERE id = ?
+                """, (int(time.time()), user_id))
         
-        self.ubuntu_wisdom = [
-            "Ubuntu teaches us that individual success comes from community prosperity",
-            "In African business, we lift each other as we climb - that's the Ubuntu way",
-            "I am because we are - your business should strengthen the entire community",
-            "Ubuntu wisdom: prosperity shared is prosperity multiplied",
-            "Community strength creates individual opportunities - that's Ubuntu philosophy",
-            "Ubuntu reminds us that sustainable success comes from empowering others",
-            "In Ubuntu thinking, your business succeeds when your community succeeds"
-        ]
+        return conv_id
     
-    def analyze_query_intent(self, message):
-        """Analyze user query to determine intent and extract key topics"""
-        message_lower = message.lower()
-        intents = []
-        
-        # Business startup intent
-        if any(word in message_lower for word in ["start", "startup", "business", "company", "entrepreneur", "launch"]):
-            intents.append("business_startup")
-        
-        # Ubuntu philosophy intent
-        if any(word in message_lower for word in ["ubuntu", "philosophy", "community", "together", "values", "culture"]):
-            intents.append("ubuntu_philosophy")
-        
-        # Mobile money intent
-        if any(word in message_lower for word in ["mobile money", "m-pesa", "momo", "payment", "fintech", "banking", "financial"]):
-            intents.append("mobile_money")
-        
-        # Culture/business culture intent
-        if any(word in message_lower for word in ["culture", "traditional", "akan", "respect", "customs", "local"]):
-            intents.append("culture_business")
-        
-        # Expansion intent
-        if any(word in message_lower for word in ["expand", "growth", "scale", "international", "across"]):
-            intents.append("expansion")
-        
-        # If no specific intent, default to business startup
-        if not intents:
-            intents.append("business_startup")
-        
-        return intents
+    def get_user_conversations(self, user_id, limit=50):
+        """Get user's conversation history"""
+        with sqlite3.connect(self.db.db_path) as conn:
+            rows = conn.execute("""
+                SELECT id, query, response, confidence, created_at, country, industry_relevant
+                FROM conversations 
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (user_id, limit)).fetchall()
+            
+            return [{
+                'id': row[0], 'query': row[1], 'response': row[2],
+                'confidence': row[3], 'created_at': row[4], 'country': row[5],
+                'industry_relevant': bool(row[6])
+            } for row in rows]
     
-    def get_user_memory_key(self, user_id, intent):
-        """Create unique key for tracking user's seen responses"""
-        return f"{user_id}_{intent}"
+    def generate_personalized_response(self, message, country, user_id="anonymous"):
+        """Generate response with personalization"""
+        
+        # Get user profile for personalization
+        user_profile = self.get_user_profile(user_id) if user_id != 'anonymous' else None
+        
+        # Base response generation (using previous logic)
+        base_response = self.generate_base_response(message, country, user_profile)
+        
+        # Add personalization if user profile exists
+        if user_profile:
+            personalized_response = self.add_personalization(base_response, user_profile, message)
+            return personalized_response
+        
+        return base_response
     
-    def generate_dynamic_response(self, message, country, user_id="anonymous"):
-        """Generate intelligent, varied response based on query analysis"""
+    def generate_base_response(self, message, country, user_profile=None):
+        """Generate base response using existing logic"""
+        country_info = self.country_data.get(country.lower(), self.country_data["ghana"])
         
-        intents = self.analyze_query_intent(message)
-        primary_intent = intents[0]
-        country = country.lower()
+        # Determine industry context
+        industry = user_profile['industry'] if user_profile else 'general'
+        industry_context = self.industry_contexts.get(industry, {})
         
-        # Get country data
-        country_info = self.country_data.get(country, self.country_data["ghana"])
+        # Select appropriate template
+        templates = self.base_responses["business_startup"][country.lower()]
+        template = random.choice(templates)
         
-        # Handle Ubuntu philosophy (universal response)
-        if primary_intent == "ubuntu_philosophy":
-            return self.get_ubuntu_response()
-        
-        # Handle country-specific responses
-        if primary_intent in self.response_templates and country in self.response_templates[primary_intent]:
-            return self.get_varied_response(primary_intent, country, country_info, user_id)
-        
-        # Handle mobile money
-        elif primary_intent == "mobile_money" and country in self.response_templates["mobile_money"]:
-            return self.get_mobile_money_response(country, country_info, user_id)
-        
-        # Handle culture/business
-        elif primary_intent == "culture_business" and country in self.response_templates["culture_business"]:
-            return self.get_culture_response(country, country_info, user_id)
-        
-        # Default to business startup advice
-        else:
-            return self.get_varied_response("business_startup", country, country_info, user_id)
-    
-    def get_varied_response(self, intent, country, country_info, user_id):
-        """Get varied response that user hasn't seen before"""
-        
-        memory_key = self.get_user_memory_key(user_id, f"{intent}_{country}")
-        seen_responses = self.response_memory.get(memory_key, set())
-        
-        templates = self.response_templates[intent][country]
-        available_templates = [i for i in range(len(templates)) if i not in seen_responses]
-        
-        # If user has seen all templates, reset their memory
-        if not available_templates:
-            seen_responses = set()
-            available_templates = list(range(len(templates)))
-        
-        # Select random template from unseen ones
-        template_idx = random.choice(available_templates)
-        template = templates[template_idx]
-        
-        # Update memory
-        seen_responses.add(template_idx)
-        self.response_memory[memory_key] = seen_responses
-        
-        # Fill template with country-specific data
+        # Fill template with data
         response = template.format(
+            industry=industry,
             sectors=", ".join(random.sample(country_info["key_sectors"], 3)),
             mobile_money=", ".join(random.sample(country_info["mobile_money"], 2)),
-            business_hubs=random.choice(country_info["business_hubs"])
+            business_hubs=random.choice(country_info["business_hubs"]),
+            focus_areas=", ".join(industry_context.get('focus_areas', ['market research', 'customer validation'])[:2])
         )
         
+        return response
+    
+    def add_personalization(self, base_response, user_profile, message):
+        """Add personalized touches to response"""
+        
+        personalized_response = base_response
+        
+        # Add industry-specific insights
+        if user_profile['industry'] in self.industry_contexts:
+            industry_context = self.industry_contexts[user_profile['industry']]
+            
+            # Add relevant challenges or opportunities
+            if any(word in message.lower() for word in ['challenge', 'problem', 'difficult']):
+                challenges = industry_context.get('key_challenges', [])
+                if challenges:
+                    personalized_response += f"\n\nCommon {user_profile['industry']} challenges include: {', '.join(challenges[:2])}. Focus on addressing these systematically."
+            
+            elif any(word in message.lower() for word in ['opportunity', 'potential', 'growth']):
+                opportunities = industry_context.get('opportunities', [])
+                if opportunities:
+                    personalized_response += f"\n\nKey opportunities in {user_profile['industry']} include: {', '.join(opportunities[:2])}. Consider how your business can capitalize on these trends."
+        
+        # Add business stage context
+        if user_profile.get('business_stage'):
+            if user_profile['business_stage'] == 'idea':
+                personalized_response += f"\n\nSince you're in the idea stage, focus on market validation and customer discovery first."
+            elif user_profile['business_stage'] == 'startup':
+                personalized_response += f"\n\nAs a startup, prioritize finding product-market fit and sustainable customer acquisition."
+            elif user_profile['business_stage'] == 'growth':
+                personalized_response += f"\n\nFor growth stage, focus on scaling operations and expanding market reach systematically."
+        
         # Add Ubuntu wisdom
-        ubuntu_quote = random.choice(self.ubuntu_wisdom)
-        response += f"\n\n🤝 Ubuntu wisdom: {ubuntu_quote}!"
+        ubuntu_wisdom = [
+            f"Ubuntu reminder for {user_profile['industry']}: your success should lift the entire {user_profile['industry']} ecosystem",
+            "Individual success comes from community prosperity - build partnerships that benefit everyone",
+            "In Ubuntu thinking, your business succeeds when your community succeeds"
+        ]
         
-        return response
+        personalized_response += f"\n\n🤝 {random.choice(ubuntu_wisdom)}!"
+        
+        return personalized_response
     
-    def get_ubuntu_response(self):
-        """Get Ubuntu philosophy response"""
-        ubuntu_responses = self.response_templates["ubuntu_philosophy"]
-        response = random.choice(ubuntu_responses)
-        return response
+    def create_shareable_link(self, conversation_id, user_id, title=None):
+        """Create shareable link for conversation"""
+        share_id = hashlib.md5(f"{conversation_id}{time.time()}".encode()).hexdigest()[:12]
+        expires_at = int(time.time()) + (30 * 24 * 3600)  # 30 days
+        
+        with sqlite3.connect(self.db.db_path) as conn:
+            conn.execute("""
+                INSERT INTO shared_conversations (share_id, conversation_id, user_id, title, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (share_id, conversation_id, user_id, title or "AfiYor Conversation", int(time.time()), expires_at))
+        
+        return share_id
     
-    def get_mobile_money_response(self, country, country_info, user_id):
-        """Get mobile money specific response"""
-        memory_key = self.get_user_memory_key(user_id, f"mobile_money_{country}")
-        seen_responses = self.response_memory.get(memory_key, set())
-        
-        templates = self.response_templates["mobile_money"][country]
-        available_templates = [i for i in range(len(templates)) if i not in seen_responses]
-        
-        if not available_templates:
-            seen_responses = set()
-            available_templates = list(range(len(templates)))
-        
-        template_idx = random.choice(available_templates)
-        template = templates[template_idx]
-        
-        seen_responses.add(template_idx)
-        self.response_memory[memory_key] = seen_responses
-        
-        response = template.format(mobile_money=", ".join(country_info["mobile_money"]))
-        ubuntu_quote = random.choice(self.ubuntu_wisdom)
-        response += f"\n\n🤝 Ubuntu wisdom: {ubuntu_quote}!"
-        
-        return response
-    
-    def get_culture_response(self, country, country_info, user_id):
-        """Get culture-specific response"""
-        memory_key = self.get_user_memory_key(user_id, f"culture_{country}")
-        seen_responses = self.response_memory.get(memory_key, set())
-        
-        templates = self.response_templates["culture_business"][country]
-        available_templates = [i for i in range(len(templates)) if i not in seen_responses]
-        
-        if not available_templates:
-            seen_responses = set()
-            available_templates = list(range(len(templates)))
-        
-        template_idx = random.choice(available_templates)
-        template = templates[template_idx]
-        
-        seen_responses.add(template_idx)
-        self.response_memory[memory_key] = seen_responses
-        
-        ubuntu_quote = random.choice(self.ubuntu_wisdom)
-        response = template + f"\n\n🤝 Ubuntu wisdom: {ubuntu_quote}!"
-        
-        return response
+    def get_shared_conversation(self, share_id):
+        """Get shared conversation by share_id"""
+        with sqlite3.connect(self.db.db_path) as conn:
+            # Update view count
+            conn.execute("UPDATE shared_conversations SET views = views + 1 WHERE share_id = ?", (share_id,))
+            
+            # Get conversation data
+            row = conn.execute("""
+                SELECT c.query, c.response, c.confidence, c.created_at, c.country,
+                       s.title, s.views, u.name, u.country as user_country
+                FROM shared_conversations s
+                JOIN conversations c ON s.conversation_id = c.id
+                LEFT JOIN users u ON s.user_id = u.id
+                WHERE s.share_id = ? AND s.expires_at > ?
+            """, (share_id, int(time.time()))).fetchone()
+            
+            if row:
+                return {
+                    'query': row[0], 'response': row[1], 'confidence': row[2],
+                    'created_at': row[3], 'country': row[4], 'title': row[5],
+                    'views': row[6], 'author_name': row[7], 'author_country': row[8]
+                }
+        return None
 
-# Initialize intelligent AfiYor
-afiyor = IntelligentAfiYor()
+# Initialize enhanced AfiYor
+afiyor = EnhancedAfiYor()
 
 @app.route('/')
 def home():
     return jsonify({
         "name": "AfiYor API",
-        "version": "2.1.0",
-        "description": "African AI Assistant with Ubuntu Philosophy - Intelligent Dynamic System",
+        "version": "3.0.0",
+        "description": "African AI Assistant with User Accounts & Personalization",
         "ubuntu": "I am because we are 🌍",
         "creator": "Built with love for African entrepreneurs",
-        "intelligence": "Dynamic contextual responses with memory",
+        "features": [
+            "User accounts and personalization",
+            "Conversation history",
+            "Industry-specific insights", 
+            "Shareable conversations",
+            "Enhanced Ubuntu philosophy integration"
+        ],
         "endpoints": {
             "chat": "/chat",
+            "register": "/register",
+            "login": "/login",
+            "history": "/history",
+            "share": "/share",
             "health": "/health"
         }
     })
+
+@app.route('/register', methods=['POST'])
+def register_user():
+    """Register new user account"""
+    try:
+        data = request.get_json()
+        required_fields = ['email', 'name', 'country']
+        
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Email, name, and country are required"}), 400
+        
+        user_id = afiyor.create_user_account(data)
+        
+        return jsonify({
+            "status": "success",
+            "user_id": user_id,
+            "message": f"Akwaaba {data['name']}! Your AfiYor account is ready.",
+            "personalization": "enabled"
+        })
+    
+    except Exception as e:
+        if "UNIQUE constraint failed" in str(e):
+            return jsonify({"error": "Email already registered"}), 400
+        return jsonify({"error": "Registration failed"}), 500
+
+@app.route('/login', methods=['POST'])
+def login_user():
+    """Simple login by email"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        with sqlite3.connect(afiyor.db.db_path) as conn:
+            user_row = conn.execute("SELECT id, name FROM users WHERE email = ?", (email,)).fetchone()
+            
+            if user_row:
+                return jsonify({
+                    "status": "success",
+                    "user_id": user_row[0],
+                    "name": user_row[1],
+                    "message": f"Welcome back, {user_row[1]}!"
+                })
+            else:
+                return jsonify({"error": "Account not found"}), 404
+    
+    except Exception as e:
+        return jsonify({"error": "Login failed"}), 500
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """Enhanced chat with personalization"""
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        country = data.get('country', 'ghana')
+        user_id = data.get('user_id', 'anonymous')
+        session_id = data.get('session_id', 'default')
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Generate personalized response
+        response = afiyor.generate_personalized_response(message, country, user_id)
+        confidence = 0.9
+        
+        # Save conversation
+        conv_id = afiyor.save_conversation(user_id, message, response, confidence, country, session_id)
+        
+        return jsonify({
+            "response": response,
+            "confidence": confidence,
+            "conversation_id": conv_id,
+            "country": country,
+            "personalized": user_id != 'anonymous',
+            "timestamp": int(time.time()),
+            "version": "3.0.0"
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "error": "Ubuntu teaches us resilience. Let me try again.",
+            "response": f"Akwaaba! I'm here to help with African business advice. How can I assist you today?",
+            "confidence": 0.5
+        }), 200
+
+@app.route('/history/<user_id>')
+def get_conversation_history(user_id):
+    """Get user's conversation history"""
+    try:
+        conversations = afiyor.get_user_conversations(user_id)
+        return jsonify({
+            "conversations": conversations,
+            "total": len(conversations),
+            "user_id": user_id
+        })
+    except Exception as e:
+        return jsonify({"error": "Could not fetch history"}), 500
+
+@app.route('/share', methods=['POST'])
+def create_share():
+    """Create shareable conversation link"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversation_id')
+        user_id = data.get('user_id')
+        title = data.get('title')
+        
+        if not conversation_id or not user_id:
+            return jsonify({"error": "Conversation ID and user ID required"}), 400
+        
+        share_id = afiyor.create_shareable_link(conversation_id, user_id, title)
+        share_url = f"/shared/{share_id}"
+        
+        return jsonify({
+            "status": "success",
+            "share_id": share_id,
+            "share_url": share_url,
+            "message": "Conversation shared successfully!"
+        })
+    
+    except Exception as e:
+        return jsonify({"error": "Could not create share link"}), 500
+
+@app.route('/shared/<share_id>')
+def view_shared_conversation(share_id):
+    """View shared conversation"""
+    try:
+        conversation = afiyor.get_shared_conversation(share_id)
+        
+        if not conversation:
+            return jsonify({"error": "Shared conversation not found or expired"}), 404
+        
+        return jsonify({
+            "conversation": conversation,
+            "shared": True,
+            "message": "This AfiYor conversation was shared with you"
+        })
+    
+    except Exception as e:
+        return jsonify({"error": "Could not load shared conversation"}), 500
 
 @app.route('/health')
 def health():
     return jsonify({
         "status": "healthy",
         "timestamp": int(time.time()),
-        "ai_status": "intelligent_dynamic_ready",
+        "ai_status": "enhanced_personalization_ready",
         "ubuntu": "Ngiyaphila - I am well because we are well",
-        "version": "2.1.0",
-        "memory_active": len(afiyor.response_memory) > 0
+        "version": "3.0.0",
+        "features": ["user_accounts", "personalization", "history", "sharing"]
     })
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.get_json()
-        message = data.get('message', '').strip()
-        country = data.get('country', 'ghana')
-        language = data.get('language', 'en')
-        user_id = data.get('user_id', 'anonymous')
-        
-        if not message:
-            return jsonify({"error": "Message is required"}), 400
-        
-        # Generate intelligent dynamic response
-        response = afiyor.generate_dynamic_response(message, country, user_id)
-        
-        # Calculate confidence based on response quality and country match
-        confidence = 0.9 if country.lower() in ["ghana", "nigeria", "kenya"] else 0.8
-        
-        return jsonify({
-            "response": response,
-            "confidence": confidence,
-            "country": country,
-            "language": language,
-            "ai_source": "intelligent_dynamic",
-            "ubuntu_wisdom": True,
-            "timestamp": int(time.time()),
-            "version": "2.1.0",
-            "personalized": user_id != "anonymous"
-        })
-    
-    except Exception as e:
-        return jsonify({
-            "error": "Ubuntu teaches us resilience. Let me try again.",
-            "response": f"Akwaaba! I'm here to help with African business, culture, and Ubuntu philosophy. Could you rephrase your question? I specialize in {country.title()}'s business environment.",
-            "confidence": 0.5,
-            "ubuntu": "Even in challenges, we grow together"
-        }), 200
-
-@app.route('/feedback', methods=['POST'])
-def feedback():
-    try:
-        data = request.get_json()
-        rating = data.get('rating', 0)
-        comment = data.get('comment', '')
-        message = data.get('original_message', '')
-        
-        feedback_entry = {
-            "rating": rating,
-            "comment": comment, 
-            "message": message,
-            "timestamp": int(time.time())
-        }
-        print(f"AfiYor Feedback: {feedback_entry}")
-        
-        return jsonify({
-            "status": "success",
-            "message": "Medaase! (Thank you!) Your feedback helps AfiYor learn and serve our community better! 🧠",
-            "ubuntu": "Through your feedback, we all grow stronger together"
-        })
-    
-    except Exception as e:
-        return jsonify({"error": "Could not process feedback"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
