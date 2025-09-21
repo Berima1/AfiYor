@@ -1,185 +1,278 @@
-from flask import Flask, request, jsonify  
-from flask_cors import CORS  
-import json  
-import time  
-import random  
-import os  
-  
-app = Flask(__name__)  
-CORS(app)  
-  
-# African Cultural Intelligence Database  
-CULTURAL_RESPONSES = {  
-    "nigeria": {  
-        "business": [  
-            "In Nigeria, relationships are everything! Build trust in your community first. Lagos is Africa's largest market with 24M people - focus on mobile-first solutions.",  
-            "Consider Paystack or Flutterwave for payments. Over 80% of Nigerians use mobile phones. Start with solving traffic, payments, or communication problems.",  
-            "Nigerian entrepreneurs value 'connection before transaction.' Spend time networking and building authentic relationships before pitching."  
-        ],  
-        "culture": [  
-            "Nigeria is incredibly diverse with over 250 ethnic groups. Respect for elders and community consensus are important in business decisions.",  
-            "Ubuntu philosophy applies here: 'I am because we are.' Your business success should lift the whole community.",  
-            "Extended family networks are crucial. Consider how your product serves not just individuals but entire family units."  
-        ]  
-    },  
-    "kenya": {  
-        "business": [  
-            "Kenya pioneered mobile money with M-Pesa! 96% of Kenyans use mobile payments. Consider how your business can integrate with this ecosystem.",  
-            "Nairobi is East Africa's Silicon Savannah with strong startup support from iHub, MEST, and local VCs. The talent pool is excellent.",  
-            "Harambee (working together) is central to Kenyan culture. Collaborative business models often succeed better than individual approaches."  
-        ],  
-        "culture": [  
-            "Harambee means 'let's pull together' - community cooperation is essential. Design your business to strengthen community bonds.",  
-            "Respect for elders and consensus-building are important. Include community leaders in your planning process.",  
-            "Kenya's entrepreneurial spirit is strong. Focus on solutions that serve the broader East African market."  
-        ]  
-    },  
-    "south_africa": {  
-        "business": [  
-            "South Africa has the most developed financial system in Africa. Consider both formal and informal markets in your strategy.",  
-            "Cape Town and Johannesburg are major tech hubs with strong infrastructure and talent. The startup ecosystem is mature.",  
-            "Ubuntu philosophy is deeply rooted: 'I am because we are.' Design your business to create shared prosperity."  
-        ],  
-        "culture": [  
-            "Ubuntu is central to South African culture: 'umuntu ngumuntu ngabantu' - a person is a person through other people.",  
-            "South Africa's diversity is its strength. Build inclusive products that serve all communities.",  
-            "Legacy of apartheid means economic inclusion must be intentional. Focus on empowering previously disadvantaged communities."  
-        ]  
-    }  
-}  
-  
-GENERAL_RESPONSES = {  
-    "fintech": [  
-        "Africa leads the world in mobile money innovation! M-Pesa processes more transactions daily than Western Union globally.",  
-        "Financial inclusion is huge - 57% of African adults still lack access to formal banking. Your fintech could change millions of lives.",  
-        "Cross-border payments are a massive opportunity with AfCFTA creating a continental market of 1.3 billion people.",  
-        "Mobile money works because it built on existing trust networks and social structures. Study these patterns."  
-    ],  
-    "startup": [  
-        "Africa has the world's youngest population - 60% under 25. Design for mobile-first, tech-savvy users who think globally.",  
-        "The African Continental Free Trade Area (AfCFTA) creates incredible opportunities for continental business expansion.",  
-        "African solutions often work better globally than foreign solutions work in Africa. Think big from day one.",  
-        "Focus on solving real African problems. The continent needs solutions for payments, education, healthcare, and agriculture."  
-    ],  
-    "culture": [  
-        "Ubuntu philosophy teaches 'I am because we are' - individual success comes from community prosperity.",  
-        "African cultures emphasize community, respect for elders, and collective decision-making. Build these into your business model.",  
-        "Extended family networks are crucial across Africa. Consider how your product serves family units, not just individuals.",  
-        "Storytelling and oral tradition are important. Use narrative to connect with your audience authentically."  
-    ]  
-}  
-  
-class AfricanAI:  
-    def __init__(self):  
-        self.responses = CULTURAL_RESPONSES  
-        self.general = GENERAL_RESPONSES  
-          
-    def get_response(self, message, country="nigeria", language="en"):  
-        message_lower = message.lower()  
-        country = country.lower()  
-          
-        # Determine category  
-        if any(word in message_lower for word in ["business", "startup", "company", "entrepreneur"]):  
-            category = "business"  
-        elif any(word in message_lower for word in ["ubuntu", "culture", "tradition", "community"]):  
-            category = "culture"  
-        elif any(word in message_lower for word in ["fintech", "payment", "mobile money", "m-pesa", "banking"]):  
-            return self._add_ubuntu_wisdom(random.choice(self.general["fintech"]), message_lower)  
-        elif any(word in message_lower for word in ["startup", "innovation", "technology"]):  
-            return self._add_ubuntu_wisdom(random.choice(self.general["startup"]), message_lower)  
-        else:  
-            category = "business"  # Default to business advice  
-          
-        # Get country-specific response  
-        if country in self.responses and category in self.responses[country]:  
-            response = random.choice(self.responses[country][category])  
-        else:  
-            # Fallback to general advice  
-            response = f"For {country.title()}, focus on mobile-first solutions and community engagement. Understanding local culture and building trust are key to success in African markets."  
-          
-        return self._add_ubuntu_wisdom(response, message_lower)  
-      
-    def _add_ubuntu_wisdom(self, response, message):  
-        if any(word in message for word in ["help", "community", "together", "ubuntu", "success"]):  
-            return response + "\n\n🌍 Ubuntu wisdom: 'I am because we are' - your success strengthens our entire African community!"  
-        return response  
-  
-# Initialize AI  
-ai = AfricanAI()  
-  
-@app.route('/')  
-def home():  
-    return jsonify({  
-        "name": "AfiYor API",  
-        "version": "1.0.0",  
-        "description": "African AI Assistant with Ubuntu Philosophy",  
-        "ubuntu": "I am because we are 🌍",  
-        "endpoints": {  
-            "chat": "/chat",  
-            "health": "/health"  
-        }  
-    })  
-  
-@app.route('/health')  
-def health():  
-    return jsonify({  
-        "status": "healthy",  
-        "timestamp": int(time.time()),  
-        "ubuntu": "Ngiyaphila - I am well because we are well"  
-    })  
-  
-@app.route('/chat', methods=['POST'])  
-def chat():  
-    try:  
-        data = request.get_json()  
-        message = data.get('message', '').strip()  
-        country = data.get('country', 'nigeria')  
-        language = data.get('language', 'en')  
-          
-        if not message:  
-            return jsonify({"error": "Message is required"}), 400  
-          
-        # Get AI response  
-        response = ai.get_response(message, country, language)  
-          
-        # Calculate confidence (simple heuristic)  
-        confidence = 0.9 if any(word in message.lower() for word in ["business", "startup", "ubuntu"]) else 0.7  
-          
-        return jsonify({  
-            "response": response,  
-            "confidence": confidence,  
-            "country": country,  
-            "language": language,  
-            "timestamp": int(time.time()),  
-            "ubuntu": "Sawubona - I see you! 👁️"  
-        })  
-      
-    except Exception as e:  
-        return jsonify({  
-            "error": "Ubuntu teaches us resilience. Let me try again.",  
-            "response": "I'm here to help with African business, culture, and Ubuntu philosophy. Could you rephrase your question?",  
-            "confidence": 0.5  
-        }), 200  
-  
-@app.route('/feedback', methods=['POST'])  
-def feedback():  
-    try:  
-        data = request.get_json()  
-        rating = data.get('rating', 0)  
-        comment = data.get('comment', '')  
-          
-        # In production, save to database  
-        print(f"Feedback received: {rating}/5 - {comment}")  
-          
-        return jsonify({  
-            "status": "success",  
-            "message": "Asante sana! Your feedback helps me learn! 🧠",  
-            "ubuntu": "Through your feedback, we grow together"  
-        })  
-      
-    except Exception as e:  
-        return jsonify({"error": "Could not process feedback"}), 500  
-  
-if __name__ == '__main__':  
-    port = int(os.environ.get('PORT', 5000))  
+# AfiYor Backend with Cohere AI - Updated app.py
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import json
+import time
+import random
+import os
+import cohere
+
+app = Flask(__name__)
+CORS(app)
+
+# Initialize Cohere AI
+co = cohere.Client(os.environ.get('COHERE_API_KEY', 'your-cohere-api-key-here'))
+
+class AfiYorAI:
+    """AfiYor - African AI with Ubuntu Philosophy and Real Intelligence"""
+    
+    def __init__(self):
+        self.ubuntu_wisdom = [
+            "Ubuntu teaches us 'I am because we are'",
+            "Individual success comes from community prosperity", 
+            "In African business, we lift each other as we climb",
+            "Community strength creates individual opportunities",
+            "Together we rise - that's the Ubuntu way"
+        ]
+        
+        self.country_context = {
+            "ghana": {
+                "mobile_money": "MTN MoMo, AirtelTigo Money, Vodafone Cash",
+                "business_hubs": "Accra Digital Centre, MEST Africa, Impact Hub Accra",
+                "key_sectors": "cocoa, gold, oil, fintech, agriculture",
+                "culture": "Akan values, respect for elders, community decision-making",
+                "languages": "English, Twi, Ga, Ewe",
+                "greeting": "Akwaaba! (Welcome)"
+            },
+            "nigeria": {
+                "mobile_money": "Paystack, Flutterwave, Opay, PalmPay", 
+                "business_hubs": "Lagos, Abuja, Port Harcourt tech ecosystems",
+                "key_sectors": "oil, agriculture, fintech, entertainment (Nollywood)",
+                "culture": "diverse ethnic groups, respect-based hierarchy, relationship-first business",
+                "languages": "English, Yoruba, Igbo, Hausa",
+                "greeting": "Sannu! Bawo! (Welcome/How are you)"
+            },
+            "kenya": {
+                "mobile_money": "M-Pesa, Airtel Money, T-Kash",
+                "business_hubs": "Nairobi Silicon Savannah, iHub, MEST",
+                "key_sectors": "agriculture, tourism, mobile money, renewable energy",
+                "culture": "Harambee (community cooperation), Ubuntu values",
+                "languages": "English, Swahili, Kikuyu",
+                "greeting": "Habari! (Hello)"
+            },
+            "south_africa": {
+                "mobile_money": "SnapScan, Zapper, FNB eWallet",
+                "business_hubs": "Cape Town, Johannesburg, Durban",
+                "key_sectors": "mining, finance, tourism, renewable energy",
+                "culture": "Ubuntu philosophy, Rainbow Nation diversity",
+                "languages": "English, Zulu, Xhosa, Afrikaans",
+                "greeting": "Sawubona! (I see you)"
+            }
+        }
+    
+    def create_african_prompt(self, message, country, language):
+        """Create contextually rich prompt for Cohere"""
+        
+        country_info = self.country_context.get(country.lower(), self.country_context["ghana"])
+        
+        prompt = f"""You are AfiYor, an intelligent African AI assistant built with Ubuntu philosophy.
+
+CONTEXT:
+- User is from {country.title()}
+- User question: "{message}"
+- Your purpose: Help African entrepreneurs succeed with Ubuntu wisdom
+
+AFRICAN KNOWLEDGE:
+- {country.title()} mobile money: {country_info['mobile_money']}
+- Business hubs: {country_info['business_hubs']}  
+- Key sectors: {country_info['key_sectors']}
+- Cultural values: {country_info['culture']}
+- Languages: {country_info['languages']}
+
+UBUNTU PHILOSOPHY:
+"I am because we are" - Individual success must benefit the community.
+Always consider how advice helps both the person and their community.
+
+RESPONSE STYLE:
+- Start with a warm African greeting
+- Give practical, actionable advice for {country.title()}
+- Include Ubuntu wisdom when relevant
+- Mention specific African solutions (mobile money, local platforms, etc.)
+- End with encouragement that builds community
+
+IMPORTANT:
+- Keep responses under 200 words
+- Be specific to {country.title()}'s context
+- Include real African business insights
+- Always maintain Ubuntu philosophy
+
+Your response:"""
+        
+        return prompt
+    
+    def get_intelligent_response(self, message, country="ghana", language="en"):
+        """Get AI-powered response from Cohere"""
+        
+        try:
+            # Create African-context prompt
+            prompt = self.create_african_prompt(message, country, language)
+            
+            # Call Cohere AI
+            response = co.generate(
+                model='command',
+                prompt=prompt,
+                max_tokens=200,
+                temperature=0.7,  # Creative but focused
+                k=0,
+                stop_sequences=[],
+                return_likelihoods='NONE'
+            )
+            
+            ai_response = response.generations[0].text.strip()
+            
+            # Add Ubuntu wisdom if not already included
+            if not any(ubuntu in ai_response.lower() for ubuntu in ["ubuntu", "i am because", "we are", "community"]):
+                ubuntu_quote = random.choice(self.ubuntu_wisdom)
+                ai_response += f"\n\n🤝 Ubuntu wisdom: {ubuntu_quote}!"
+            
+            return {
+                "response": ai_response,
+                "source": "cohere_ai",
+                "country": country,
+                "confidence": 0.9,
+                "ubuntu_wisdom": True
+            }
+            
+        except Exception as e:
+            # Fallback to thoughtful pre-written response
+            print(f"Cohere API error: {e}")
+            return self.get_fallback_response(message, country)
+    
+    def get_fallback_response(self, message, country):
+        """Intelligent fallback when API is unavailable"""
+        
+        country_info = self.country_context.get(country.lower(), self.country_context["ghana"])
+        message_lower = message.lower()
+        
+        # Determine response type
+        if any(word in message_lower for word in ["business", "startup", "company", "entrepreneur"]):
+            response = f"{country_info['greeting']} For business success in {country.title()}, focus on building trust within your community first. The key sectors here are {country_info['key_sectors']}. Consider mobile money integration with {country_info['mobile_money']} - it's essential for reaching customers effectively."
+            
+        elif any(word in message_lower for word in ["mobile money", "payment", "fintech", "banking"]):
+            response = f"In {country.title()}, mobile money is transformative! The main platforms are {country_info['mobile_money']}. These systems work because they build on existing trust networks and solve real community problems."
+            
+        elif any(word in message_lower for word in ["culture", "ubuntu", "community", "tradition"]):
+            response = f"Ubuntu philosophy is central to {country.title()}'s business culture: 'I am because we are.' This means {country_info['culture']}. Successful businesses here strengthen the entire community, not just individual wealth."
+            
+        else:
+            response = f"{country_info['greeting']} {country.title()} has incredible opportunities in {country_info['key_sectors']}. Focus on mobile-first solutions since {country_info['mobile_money']} are widely used. Build relationships and trust - that's how business works here."
+        
+        # Add Ubuntu wisdom
+        ubuntu_quote = random.choice(self.ubuntu_wisdom)
+        response += f"\n\n🌍 Ubuntu wisdom: {ubuntu_quote} - your success strengthens our entire African community!"
+        
+        return {
+            "response": response,
+            "source": "fallback_intelligent",
+            "country": country,
+            "confidence": 0.7,
+            "ubuntu_wisdom": True
+        }
+
+# Initialize AfiYor AI
+afiyor = AfiYorAI()
+
+@app.route('/')
+def home():
+    return jsonify({
+        "name": "AfiYor API",
+        "version": "2.0.0",
+        "description": "African AI Assistant with Ubuntu Philosophy - Powered by Cohere",
+        "ubuntu": "I am because we are 🌍",
+        "creator": "Built with love for African entrepreneurs",
+        "endpoints": {
+            "chat": "/chat",
+            "health": "/health"
+        }
+    })
+
+@app.route('/health')
+def health():
+    return jsonify({
+        "status": "healthy",
+        "timestamp": int(time.time()),
+        "ai_status": "cohere_ready",
+        "ubuntu": "Ngiyaphila - I am well because we are well",
+        "version": "2.0.0"
+    })
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        country = data.get('country', 'ghana')
+        language = data.get('language', 'en')
+        
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+        
+        # Get AI response
+        result = afiyor.get_intelligent_response(message, country, language)
+        
+        return jsonify({
+            "response": result["response"],
+            "confidence": result["confidence"],
+            "country": country,
+            "language": language,
+            "ai_source": result["source"],
+            "ubuntu_wisdom": result["ubuntu_wisdom"],
+            "timestamp": int(time.time()),
+            "version": "2.0.0"
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "error": "Ubuntu teaches us resilience. Let me try again.",
+            "response": f"Akwaaba! I'm here to help with African business, culture, and Ubuntu philosophy. Could you rephrase your question? I specialize in {country.title()}'s business environment.",
+            "confidence": 0.5,
+            "ubuntu": "Even in challenges, we grow together"
+        }), 200
+
+@app.route('/feedback', methods=['POST'])
+def feedback():
+    try:
+        data = request.get_json()
+        rating = data.get('rating', 0)
+        comment = data.get('comment', '')
+        message = data.get('original_message', '')
+        
+        # Log feedback for improvement
+        feedback_entry = {
+            "rating": rating,
+            "comment": comment, 
+            "message": message,
+            "timestamp": int(time.time())
+        }
+        print(f"AfiYor Feedback: {feedback_entry}")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Medaase! (Thank you!) Your feedback helps AfiYor learn and serve our community better! 🧠",
+            "ubuntu": "Through your feedback, we all grow stronger together"
+        })
+    
+    except Exception as e:
+        return jsonify({"error": "Could not process feedback"}), 500
+
+@app.route('/countries')
+def get_countries():
+    """Get supported African countries with context"""
+    countries = []
+    for country, info in afiyor.country_context.items():
+        countries.append({
+            "code": country,
+            "name": country.title(),
+            "greeting": info["greeting"],
+            "mobile_money": info["mobile_money"],
+            "key_sectors": info["key_sectors"]
+        })
+    
+    return jsonify({
+        "countries": countries,
+        "ubuntu": "Unity in diversity - celebrating all of Africa!"
+    })
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
