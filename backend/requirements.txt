@@ -1,3 +1,5 @@
-Flask==2.3.3  
-Flask-CORS==4.0.0  
+# AfiYor Backend Requirements - requirements.txt
+Flask==2.3.3
+Flask-CORS==4.0.0
+cohere==4.37
 gunicorn==21.2.0
