@@ -292,3 +292,22 @@ if __name__ == '__main__':
     print("Research-based knowledge loaded")
     print("Ubuntu wisdom integrated")
     app.run(host='0.0.0.0', port=port, debug=False)
+
+@app.route('/login', methods=['POST'])
+def login_user():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        # Simple login simulation (no actual user database yet)
+        return jsonify({
+            "status": "success",
+            "user_id": "user_" + email.split('@')[0],
+            "name": email.split('@')[0].title(),
+            "message": f"Welcome back!"
+        })
+    except Exception as e:
+        return jsonify({"error": "Login failed"}), 500
