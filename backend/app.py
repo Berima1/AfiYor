@@ -236,6 +236,9 @@ class ProfessionalAfiYor:
 # Initialize professional AfiYor
 professional_afiyor = ProfessionalAfiYor()
 
+# Simple user storage (in production, use a proper database)
+users_db = {}
+
 @app.route('/')
 def home():
     return jsonify({
@@ -245,6 +248,86 @@ def home():
         "ubuntu": "I am because we are",
         "status": "professional_ready"
     })
+
+@app.route('/register', methods=['POST'])
+def register_user():
+    """Register new user account"""
+    try:
+        data = request.get_json()
+        
+        # Required fields
+        email = data.get('email')
+        name = data.get('name')
+        country = data.get('country', 'ghana')
+        
+        if not email or not name:
+            return jsonify({"error": "Email and name are required"}), 400
+        
+        # Check if user already exists
+        if email in users_db:
+            return jsonify({"error": "Email already registered"}), 400
+        
+        # Create user
+        user_id = f"user_{len(users_db) + 1}"
+        users_db[email] = {
+            "id": user_id,
+            "name": name,
+            "email": email,
+            "country": country,
+            "industry": data.get('industry', 'general'),
+            "business_stage": data.get('business_stage', 'idea'),
+            "created_at": int(time.time())
+        }
+        
+        return jsonify({
+            "status": "success",
+            "user_id": user_id,
+            "message": f"Akwaaba {name}! Your AfiYor account is ready.",
+            "personalization": "enabled"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": "Registration failed"}), 500
+
+@app.route('/login', methods=['POST'])
+def login_user():
+    """Simple login by email"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        
+        # Check if user exists
+        if email in users_db:
+            user = users_db[email]
+            return jsonify({
+                "status": "success",
+                "user_id": user["id"],
+                "name": user["name"],
+                "message": f"Welcome back, {user['name']}!"
+            })
+        else:
+            return jsonify({"error": "Account not found. Please register first."}), 404
+            
+    except Exception as e:
+        return jsonify({"error": "Login failed"}), 500
+
+@app.route('/history/<user_id>')
+def get_conversation_history(user_id):
+    """Get user's conversation history (placeholder)"""
+    try:
+        # In a real app, you'd fetch from database
+        # For now, return empty history
+        return jsonify({
+            "conversations": [],
+            "total": 0,
+            "user_id": user_id,
+            "message": "History feature will be available soon!"
+        })
+    except Exception as e:
+        return jsonify({"error": "Could not fetch history"}), 500
 
 @app.route('/chat', methods=['POST'])
 def professional_chat():
@@ -292,22 +375,3 @@ if __name__ == '__main__':
     print("Research-based knowledge loaded")
     print("Ubuntu wisdom integrated")
     app.run(host='0.0.0.0', port=port, debug=False)
-
-@app.route('/login', methods=['POST'])
-def login_user():
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        
-        if not email:
-            return jsonify({"error": "Email is required"}), 400
-        
-        # Simple login simulation (no actual user database yet)
-        return jsonify({
-            "status": "success",
-            "user_id": "user_" + email.split('@')[0],
-            "name": email.split('@')[0].title(),
-            "message": f"Welcome back!"
-        })
-    except Exception as e:
-        return jsonify({"error": "Login failed"}), 500
