@@ -1,0 +1,8 @@
+
+.env
+__pycache__/
+*.pyc
+venv/
+.afiyor_env/
+alembic.ini
+afiyor.db
